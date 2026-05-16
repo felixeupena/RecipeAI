@@ -1,7 +1,7 @@
 import os
 from typing import List, Dict, Optional
-from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
@@ -58,7 +58,8 @@ class RAGPipeline:
                 persist_directory=self.persist_directory
             )
         
-        self.vectorstore.persist()
+        # Note: Chroma 0.5+ auto-persists; .persist() was removed.
+
         
         # Create retriever
         self.retriever = self.vectorstore.as_retriever(
