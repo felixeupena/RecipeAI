@@ -49,9 +49,12 @@ class RAGPipeline:
                 persist_directory=self.persist_directory,
                 embedding_function=self.embeddings
             )
-            # Add new documents
-            self.vectorstore.add_documents(splits)
+            # Only add documents if there are any (avoids empty-upsert error when just loading)
+            if splits:
+                self.vectorstore.add_documents(splits)
         else:
+            if not splits:
+                raise ValueError("Cannot create a new vector store with no documents.")
             self.vectorstore = Chroma.from_documents(
                 documents=splits,
                 embedding=self.embeddings,

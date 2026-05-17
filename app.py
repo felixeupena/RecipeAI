@@ -19,20 +19,19 @@ def img_to_data_uri(path: str) -> str:
         data = base64.b64encode(f.read()).decode("ascii")
     return f"data:image/{mime};base64,{data}"
 
-# OpenAI API key — read from Streamlit secrets (cloud) or env var (local).
-# Set OPENAI_API_KEY in .streamlit/secrets.toml locally and in Streamlit Cloud's Secrets panel.
+
 try:
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 except Exception:
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
-# Page config
+
 st.set_page_config(page_title="RecipeAI", page_icon="🤖", layout="wide")
 
 with open("style.css", "r", encoding="utf-8") as css_file:
     st.markdown(f"<style>{css_file.read()}</style>", unsafe_allow_html=True)
 
-# Session state
+
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'user' not in st.session_state: st.session_state.user = None
 if 'page' not in st.session_state: st.session_state.page = 'login'
@@ -308,21 +307,34 @@ else:
 # ============ FLOATING CHAT WIDGET ============
 if st.session_state.logged_in:
     # Auto-load recipes at login so the user can chat without uploading.
-    if not st.session_state.auto_processed:
+    # Retry every rerun until we actually have a working pipeline.
+    if st.session_state.rag_pipeline is None:
+        if not OPENAI_API_KEY:
+            st.warning("⚠️ OPENAI_API_KEY is not set. Add it to .streamlit/secrets.toml (local) or Streamlit Cloud Secrets, then restart the app.")
         # If an index already exists, just load it
-        if os.path.exists("./chroma_db") and st.session_state.rag_pipeline is None:
+        elif os.path.exists("./chroma_db"):
             try:
                 rag = RAGPipeline()
                 rag.initialize_vectorstore([])  # load existing
-                rag.initialize_qa_chain(OPENAI_API_KEY)
-                st.session_state.rag_pipeline = rag
-                st.session_state.recipes_processed = True
-                st.session_state.checked_existing_db = True
+                # Check if the loaded store is actually populated
+                try:
+                    count = rag.vectorstore._collection.count()
+                except Exception:
+                    count = 0
+                if count == 0:
+                    # Empty/corrupt index — wipe and rebuild below
+                    import shutil
+                    shutil.rmtree("./chroma_db", ignore_errors=True)
+                else:
+                    rag.initialize_qa_chain(OPENAI_API_KEY)
+                    st.session_state.rag_pipeline = rag
+                    st.session_state.recipes_processed = True
+                    st.session_state.checked_existing_db = True
             except Exception as e:
-                print(f"Failed to load existing vectorstore: {e}")
+                st.error(f"Failed to load existing recipe index: {e}")
 
         # If no existing index, build one from built-in + uploaded PDFs
-        if not os.path.exists("./chroma_db"):
+        if OPENAI_API_KEY and not os.path.exists("./chroma_db"):
             with st.spinner("Indexing recipes..."):
                 processor = RecipeProcessor()
                 all_recipes = []
@@ -353,8 +365,6 @@ if st.session_state.logged_in:
                     rag.initialize_qa_chain(OPENAI_API_KEY)
                     st.session_state.rag_pipeline = rag
                     st.session_state.recipes_processed = True
-
-        st.session_state.auto_processed = True
     
     # Chat button
     if st.button("🤖", key="chat_btn", type="primary", help="Chat with RecipeAI"):
@@ -433,7 +443,10 @@ if st.session_state.logged_in:
             # Chat input — always available
             if prompt := st.chat_input("Ask about recipes...", key="popup_chat"):
                 if st.session_state.rag_pipeline is None:
-                    st.error("Recipe index isn't ready yet. Please upload a recipe file and click 'Process Recipes' first.")
+                    if not OPENAI_API_KEY:
+                        st.error("Recipe AI is not initialized: OPENAI_API_KEY is missing. Add it to .streamlit/secrets.toml or Streamlit Cloud Secrets, then restart the app.")
+                    else:
+                        st.error("Recipe index isn't ready yet. Refresh the page, or upload a recipe file and click 'Process Recipes'.")
                 else:
                     st.session_state.chat_history.append({"role": "user", "content": prompt})
                     with st.spinner("Thinking..."):
