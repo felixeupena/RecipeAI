@@ -27,7 +27,6 @@ class RecipeProcessor:
             if recipes:
                 return recipes
 
-        # Strategy B: Original delimiter-based splitting
         recipe_blocks = re.split(r'\n(?=Recipe:|Title:|##\s+[A-Z]|\d+\.\s+[A-Z])', text, flags=re.IGNORECASE)
 
         if len(recipe_blocks) == 1:
@@ -43,7 +42,6 @@ class RecipeProcessor:
             if recipe:
                 recipes.append(recipe)
 
-        # Fallback: store entire document as a single recipe
         if not recipes and len(text.strip()) > 100:
             recipes.append({
                 'title': 'Cookbook Contents',
@@ -63,12 +61,10 @@ class RecipeProcessor:
         """Split text into recipe blocks for cookbooks where each recipe starts with
         a title line followed by 'Prep Time:'."""
         lines = text.split('\n')
-        # Find indexes where 'Prep Time' appears
         prep_indexes = [i for i, l in enumerate(lines) if re.match(r'\s*Prep\s*Time\s*:', l, re.IGNORECASE)]
         if len(prep_indexes) < 2:
             return []
 
-        # Determine the title line for each recipe (closest non-empty line above prep_time)
         starts = []
         for pi in prep_indexes:
             j = pi - 1
@@ -76,7 +72,6 @@ class RecipeProcessor:
                 j -= 1
             starts.append(j if j >= 0 else pi)
 
-        # Build blocks from start[k] to start[k+1]-1
         blocks = []
         for k, s in enumerate(starts):
             end = starts[k + 1] if k + 1 < len(starts) else len(lines)
@@ -108,7 +103,6 @@ class RecipeProcessor:
             if not line:
                 continue
 
-            # Section headers (with or without colon, on their own line)
             if re.match(r'^(title|recipe|name)\s*:', line, re.IGNORECASE):
                 recipe['title'] = re.sub(r'^(title|recipe|name)\s*:\s*', '', line, flags=re.IGNORECASE)
                 continue
@@ -119,7 +113,6 @@ class RecipeProcessor:
                 current_section = 'instructions'
                 continue
 
-            # Metadata lines
             if re.match(r'^(cuisine|style|type)\s*:', line, re.IGNORECASE):
                 recipe['cuisine'] = re.sub(r'^(cuisine|style|type)\s*:\s*', '', line, flags=re.IGNORECASE)
                 continue
@@ -134,15 +127,12 @@ class RecipeProcessor:
                 recipe['cook_time'] = re.sub(r'^(cook|cooking)\s*time\s*:\s*', '', line, flags=re.IGNORECASE)
                 continue
             if re.match(r'^total\s*time\s*:', line, re.IGNORECASE):
-                # Skip — keep prep/cook separately
                 continue
             if re.match(r'^(servings?|yields?)\s*:', line, re.IGNORECASE):
                 recipe['servings'] = re.sub(r'^(servings?|yields?)\s*:\s*', '', line, flags=re.IGNORECASE)
                 continue
 
-            # Section content
             if current_section == 'ingredients':
-                # Strip leading numbering/bullets like "1.", "1)", "-", "•"
                 cleaned = re.sub(r'^[\-\u2022\d]+[\.\)]?\s*', '', line)
                 if cleaned:
                     recipe['ingredients'].append(cleaned)
@@ -151,7 +141,6 @@ class RecipeProcessor:
                 if cleaned:
                     recipe['instructions'].append(cleaned)
 
-        # Title fallback: first non-metadata line
         if not recipe['title']:
             for l in lines:
                 t = l.strip()
@@ -214,12 +203,10 @@ class RecipeProcessor:
         documents = []
         
         for recipe in recipes:
-            # Ensure dietary is not empty for ChromaDB
             dietary = recipe['dietary'] if recipe['dietary'] else ['None']
             ingredients = recipe['ingredients'] if recipe['ingredients'] else ['None']
             instructions = recipe['instructions'] if recipe['instructions'] else ['None']
             
-            # Create a searchable text representation
             searchable_text = f"""
 Recipe: {recipe['title']}
 Cuisine: {recipe['cuisine']}

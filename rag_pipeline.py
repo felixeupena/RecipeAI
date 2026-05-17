@@ -25,7 +25,6 @@ class RAGPipeline:
     
     def initialize_vectorstore(self, documents: List[Dict]):
         """Initialize vector store with recipe documents."""
-        # Convert to LangChain Document format
         langchain_docs = [
             Document(
                 page_content=doc['page_content'],
@@ -34,7 +33,6 @@ class RAGPipeline:
             for doc in documents
         ]
         
-        # Split documents into chunks
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200,
@@ -43,13 +41,11 @@ class RAGPipeline:
         
         splits = text_splitter.split_documents(langchain_docs)
         
-        # Create or load vector store
         if os.path.exists(self.persist_directory):
             self.vectorstore = Chroma(
                 persist_directory=self.persist_directory,
                 embedding_function=self.embeddings
             )
-            # Only add documents if there are any (avoids empty-upsert error when just loading)
             if splits:
                 self.vectorstore.add_documents(splits)
         else:
@@ -61,10 +57,8 @@ class RAGPipeline:
                 persist_directory=self.persist_directory
             )
         
-        # Note: Chroma 0.5+ auto-persists; .persist() was removed.
 
         
-        # Create retriever
         self.retriever = self.vectorstore.as_retriever(
             search_type="similarity",
             search_kwargs={"k": 4}
@@ -78,7 +72,6 @@ class RAGPipeline:
             api_key=openai_api_key
         )
         
-        # Create a simple RAG chain using LCEL
         template = """You are a helpful recipe assistant. Use the following pieces of retrieved recipes to answer the question. 
         If the context contains relevant information, use it to answer. If the context doesn't contain the exact recipe but has related information, mention that.
         Be helpful and try to provide the best answer possible from what's available.
@@ -115,7 +108,7 @@ Answer:"""
             results.append({
                 'content': doc.page_content,
                 'metadata': doc.metadata,
-                'score': 0.0  # Chroma doesn't provide scores by default
+                'score': 0.0  
             })
         
         return results
@@ -129,16 +122,13 @@ Answer:"""
             }
         
         try:
-            # Get relevant documents separately for display and debugging
             docs = self.retriever.invoke(question)
             
-            # Debug: print what was retrieved
             print(f"Question: {question}")
             print(f"Retrieved {len(docs)} documents")
             for i, doc in enumerate(docs[:2]):
                 print(f"Doc {i+1} preview: {doc.page_content[:200]}...")
             
-            # Get answer from the chain
             answer = self.qa_chain.invoke(question)
             
             return {

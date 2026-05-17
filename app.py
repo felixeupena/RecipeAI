@@ -96,7 +96,6 @@ if st.session_state.logged_in:
             st.rerun()
     st.markdown('<div class="topbar-divider"></div>', unsafe_allow_html=True)
 
-# ============ LOGIN PAGE ============
 if not st.session_state.logged_in:
     st.markdown("""
     <div class="brand-header">
@@ -139,7 +138,6 @@ if not st.session_state.logged_in:
                         save_users(users)
                         st.success("Account created! You can now log in.")
 
-# ============ LOGGED IN PAGES ============
 else:
     if st.session_state.page == 'home':
         recipes = BUILT_IN_RECIPES
@@ -148,7 +146,6 @@ else:
         if 'selected_category' not in st.session_state:
             st.session_state.selected_category = "All"
 
-        # ==== DETAIL VIEW ====
         if st.session_state.selected_recipe is not None:
             r = recipes[st.session_state.selected_recipe]
             if st.button("✕  Close", key="detail_close"):
@@ -191,7 +188,6 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            # ==== LIST VIEW ====
             search = st.text_input("Search", placeholder="🔍  Search recipes...", label_visibility="collapsed", key="recipe_search")
 
             cols = st.columns(len(categories))
@@ -304,25 +300,24 @@ else:
                 if cuisines:
                     st.success(f"Saved: {', '.join(cuisines)}")
 
-# ============ FLOATING CHAT WIDGET ============
+
 if st.session_state.logged_in:
-    # Auto-load recipes at login so the user can chat without uploading.
-    # Retry every rerun until we actually have a working pipeline.
+
     if st.session_state.rag_pipeline is None:
         if not OPENAI_API_KEY:
             st.warning("⚠️ OPENAI_API_KEY is not set. Add it to .streamlit/secrets.toml (local) or Streamlit Cloud Secrets, then restart the app.")
-        # If an index already exists, just load it
+   
         elif os.path.exists("./chroma_db"):
             try:
                 rag = RAGPipeline()
-                rag.initialize_vectorstore([])  # load existing
-                # Check if the loaded store is actually populated
+                rag.initialize_vectorstore([])  
+                
                 try:
                     count = rag.vectorstore._collection.count()
                 except Exception:
                     count = 0
                 if count == 0:
-                    # Empty/corrupt index — wipe and rebuild below
+           
                     import shutil
                     shutil.rmtree("./chroma_db", ignore_errors=True)
                 else:
@@ -333,13 +328,11 @@ if st.session_state.logged_in:
             except Exception as e:
                 st.error(f"Failed to load existing recipe index: {e}")
 
-        # If no existing index, build one from built-in + uploaded PDFs
         if OPENAI_API_KEY and not os.path.exists("./chroma_db"):
             with st.spinner("Indexing recipes..."):
                 processor = RecipeProcessor()
                 all_recipes = []
 
-                # Built-in recipes
                 for r in BUILT_IN_RECIPES:
                     all_recipes.append({
                         'title': r['title'],
@@ -352,7 +345,6 @@ if st.session_state.logged_in:
                         'instructions': r['instructions'],
                     })
 
-                # Uploaded files (kawaling pinoy, cookbook, etc.)
                 if os.path.exists("./uploaded_recipes"):
                     for file in os.listdir("./uploaded_recipes"):
                         if file.endswith(('.pdf', '.txt', '.md')):
@@ -366,20 +358,17 @@ if st.session_state.logged_in:
                     st.session_state.rag_pipeline = rag
                     st.session_state.recipes_processed = True
     
-    # Chat button
     if st.button("🤖", key="chat_btn", type="primary", help="Chat with RecipeAI"):
         st.session_state.chat_open = not st.session_state.chat_open
     
-    # Chat popup
     if st.session_state.chat_open:
         with st.container():
             st.markdown('<div class="assistant-header"><span class="assistant-icon">💬</span><h2>RecipeAI Assistant</h2></div>', unsafe_allow_html=True)
 
-            # Check for existing vector store
             if not st.session_state.checked_existing_db and os.path.exists("./chroma_db"):
                 try:
                     rag = RAGPipeline()
-                    rag.initialize_vectorstore([])  # Load existing
+                    rag.initialize_vectorstore([])  
                     rag.initialize_qa_chain(OPENAI_API_KEY)
                     st.session_state.rag_pipeline = rag
                     st.session_state.recipes_processed = True
@@ -387,7 +376,6 @@ if st.session_state.logged_in:
                 except:
                     st.session_state.checked_existing_db = True
 
-            # Upload card
             with st.container(border=True):
                 uploaded_files = st.file_uploader(
                     "Upload recipe files (PDF/text)",
@@ -425,10 +413,8 @@ if st.session_state.logged_in:
                     else:
                         st.error("Please upload files.")
 
-            # Chat section header
             st.markdown('<div class="chat-section-title"><span>💬</span><h3>Chat</h3></div>', unsafe_allow_html=True)
 
-            # Chat area (real scrollable bordered container)
             chat_box = st.container(height=420, border=True)
             with chat_box:
                 if not st.session_state.chat_history:
@@ -440,7 +426,6 @@ if st.session_state.logged_in:
                         else:
                             st.chat_message("assistant").write(msg["content"])
 
-            # Chat input — always available
             if prompt := st.chat_input("Ask about recipes...", key="popup_chat"):
                 if st.session_state.rag_pipeline is None:
                     if not OPENAI_API_KEY:
@@ -464,9 +449,7 @@ if st.session_state.logged_in:
             with col_close:
                 if st.button("✕ Close", key="popup_close"):
                     st.session_state.chat_open = False
-                    st.rerun()
 
-# Footer
 st.markdown("""
 <div class="app-footer">
     <span class="footer-brand">🍳 RecipeAI</span>
